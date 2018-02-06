@@ -1,0 +1,6 @@
+05   28.10.2017--23:57:03 -  [WARN] - MyNamespace.MyClass::MyMtehod() - Message about something!
+10   28.10.2017--23:57:07 - [DEBUG] - MyNamespace.OtherClass::MyMethod() - Also message about something
+15   29.10.2017--00:00:01 -  [INFO] - Utils.Class::YayMethod() - Doing some stuff right now!
+105  28.10.2017--23:57:03 -  [WARN] - MyNamespace.MyClass::MyMtehod() - Message about something!
+110  28.10.2017--23:57:07 - [DEBUG] - MyNamespace.OtherClass::MyMethod() - Also message about something
+15   29.10.2017--00:00:01 -  [INFO] - Utils.Class::YayMethod() - Doing some stuff right now!

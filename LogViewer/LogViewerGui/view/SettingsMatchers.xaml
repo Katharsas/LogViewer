@@ -1,0 +1,97 @@
+﻿<UserControl
+    x:Class="LogViewerGui.view.SettingsMatchers"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:conv="clr-namespace:LogViewer.LogViewer.ViewModel.Converter;assembly=LogViewer"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:local="clr-namespace:LogViewerGui.view"
+    xmlns:matcher="clr-namespace:LogViewer.LogViewer.ViewModel.Matcher;assembly=LogViewer"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:utils="clr-namespace:WpfUtils;assembly=LogViewer"
+    d:DesignHeight="300"
+    d:DesignWidth="300"
+    mc:Ignorable="d">
+
+    <UserControl.Resources>
+        <conv:MatcherTypeStringConverter x:Key="MatcherTypeStringConverter" />
+        <utils:BooleanCollapseVisibilityConverter x:Key="BooleanCollapseVisibilityConverter" />
+    </UserControl.Resources>
+
+    <StackPanel>
+        <TextBlock>Matcher:</TextBlock>
+        <Button Command="{Binding AddMatcher}">Create New</Button>
+
+        <StackPanel>
+            <ItemsControl ItemsSource="{Binding MatcherVMs}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+
+                        <Border
+                            Margin="0,5,0,0"
+                            Padding="2"
+                            BorderBrush="DarkGray"
+                            BorderThickness="1">
+                            <!--  Single Matcher Start  -->
+                            <StackPanel>
+                                <Button Command="{Binding RemoveMatcher}">Remove</Button>
+                                <TextBlock>Column Name:</TextBlock>
+                                <TextBox Text="{Binding Name}" />
+                                <TextBlock>Type:</TextBlock>
+                                <ComboBox ItemsSource="{Binding AllMatcherTypes}" SelectedItem="{Binding SelectedMatcherType}" />
+
+                                <StackPanel Orientation="Horizontal" Visibility="{Binding CanBeLevel, Converter={StaticResource BooleanCollapseVisibilityConverter}}">
+                                    <TextBlock>This matcher represents the Log Level:</TextBlock>
+                                    <CheckBox
+                                        Margin="10,0,0,0"
+                                        VerticalAlignment="Center"
+                                        IsChecked="{Binding IsLevel}" />
+                                </StackPanel>
+
+                                <StackPanel Visibility="{Binding HasAffixes, Converter={StaticResource BooleanCollapseVisibilityConverter}}">
+                                    <TextBlock>Prefix:</TextBlock>
+                                    <TextBox Text="{Binding Prefix}" />
+                                    <TextBlock>Suffix:</TextBlock>
+                                    <TextBox Text="{Binding Suffix}" />
+                                </StackPanel>
+
+                                <StackPanel Visibility="{Binding HasSeparator, Converter={StaticResource BooleanCollapseVisibilityConverter}}">
+                                    <TextBlock>Separator:</TextBlock>
+                                    <TextBox Text="{Binding Separator}" />
+                                </StackPanel>
+
+                                <Border DataContext="{Binding MatcherVM}">
+                                    <Border.Resources>
+
+                                        <!--  Specialized Matchers  -->
+                                        <DataTemplate DataType="{x:Type matcher:DateTimeFormatMatcherVM}">
+                                            <StackPanel>
+                                                <TextBlock>Format</TextBlock>
+                                                <TextBox Text="{Binding DateTimeFormat}" />
+                                            </StackPanel>
+                                        </DataTemplate>
+
+                                        <DataTemplate DataType="{x:Type matcher:TextMatcherVM}" />
+
+                                        <DataTemplate DataType="{x:Type matcher:NumberMatcherVM}">
+                                            <StackPanel>
+                                                <TextBlock>Decimal Separator</TextBlock>
+                                                <TextBox MaxLength="1" Text="{Binding DecimalSeparator}" />
+                                                <TextBlock>Group Separator</TextBlock>
+                                                <TextBox MaxLength="1" Text="{Binding GroupSeparator}" />
+                                            </StackPanel>
+                                        </DataTemplate>
+
+                                    </Border.Resources>
+                                    <ContentPresenter Content="{Binding}" />
+                                </Border>
+                            </StackPanel>
+                            <!--  Single Matcher End  -->
+                        </Border>
+
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </StackPanel>
+    </StackPanel>
+
+</UserControl>

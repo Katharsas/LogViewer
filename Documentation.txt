@@ -1,0 +1,134 @@
+Log Analyzer
+===================
+
+The log analyzer is a program to view and navigate log-files for the purpose of extracting information that is valuable for the user. It should be flexible enough to support log formats unknown to the analyzer through configuration.
+
+1. Use-Cases
+--------------------------------------
+
+a) Sources
+The log analyzer should be able to monitor one or multiple logfiles with uniform format at once. To be able to use the log analyzer while the log producing appication is running, the log analyzer should not be able to write to the log to avoid any write locks and allow the logging application to continue to log to the file while automatically picking up those changes.
+
+Optional:
+The log analyzer should be able to load a log from a DB table. It should also be able to automatically configure itself when given a logback format pattern string. Example:
+
+Logback format pattern: "%date{HH:mm:ss.SSS} %-5level %logger{200} - %msg %n"
+Corresponding example log statement: "17:43:23.772 INFO  gmm.service.assets.vcs.SvnPlugin - Successfully reached SVN repository" (see https://logback.qos.ch/manual/layouts.html) should be automatically parsable.
+
+b) Presentation
+Once loaded, the log analyzer should provide operations to the user to navigate through the log and find the information he is looking for. To be able to skim the information efficiently, the program must be able to only show the information that is relevant to the user (for this purpose, a table-style GUI is probably a good start).
+This means that there needs to be an easy way to hide meta-data information usually found in program logs like 'time', 'thread', 'class/method' 'origin', etc. of a given log statement. It should also be possible to filter the shown statements by values in any meta-data 'column', with both exlude/include filters for any column.
+The same goes for the different log levels that a statement belongs to (like DEBUG, INFO, WARN, ERROR, configurable!). it should be possible to apply rich text formatting like text color to statements based on the log level. Furthermore, if time information is available, it should be easy to only show log statements of the time interval that the user is interested in.
+
+2. Structure of a log file
+--------------------------------------
+
+A "log atom" (=statement) consists of text that was logged to the file at once, usually caused by a single method call in the source code, and it usually has a fixed structure that can be used to provide viewing support, filtering options and more. The structure is as follows:
+
+An atom always begins with several meta-data parts on the first line, followed by a log message on the same line, followed by any number of lines of additional messages, followed of any mumber of lines of additional stacktraces. Any of these are optional. Once an atom has ended, the next atom begins at the next line. We have 2 possibilities to distinguish the start of new atom from additional lines of message or stacktrace:
+1. Each message/stacktrace newline features an easily recognizable special syntax, like a certain prefix.
+2. The message/stacktrace does not match the Meta-Data format expected from a new atom line.
+
+An implementation may allow users to provide multiple prefixes that signal a multiline message/stacktrace, and if none are configured or the configured ones do not match, the line is checked for the expected Meta-Data format. If both message prefixes and meta-data do not match, the text should not be interpreted at all or as message/stacktrace.
+
+The meta-data is interpreted by applying user-configured matchers to the text, one matcher per meta-data column.
+
+3. Column Matchers
+--------------------------------------
+
+Every part of the atom that gets matched by a configured matcher is "depleted" and cannot be matched by another matcher. For example, if 2 regex matchers are configured, the second one will not "see" text that the first matcher has matched. This makes matchers easier to handle, but does not allow to split a nested structure into multiple matcher columns.
+
+Meta-data matchers:
+- Number (inline, fixed or floating)
+- Text-Nospace (inline, end of text determined by whitespace)
+- Text-Configurable (inline, end of text determined by given seperator string)
+- Regex-Inline (inline, any regex)
+- Date-SimpleDateFormat (inline, configurable, for syntax see https://docs.oracle.com/javase/8/docs/api/java/text/SimpleDateFormat.html)
+- Date-ISO-8601 (inline, configurable, for syntax see https://en.wikipedia.org/wiki/ISO_8601)
+
+Stack-trace matchers:
+- Stacktrace-Java (multiline, typical java trace)
+- Stacktrace-Prefixable (multiline, each line has configured prefix)
+
+Other:
+- Regex-Full (multiline, any regex)
+
+Any matchers can be chained to parse the meta-data of a log statement into columns. Each matcher (except regex matchers) can be configured to have prefix and/or suffix that will be removed when matching and not appear in the column. If a regex matcher specifies capuring groups, only the first group's content will be shown in the column, the rest will be ommited.
+
+One matcher/column can be marked to contain the log levels. The log levels can be configured, so that when the parsed log level matches a configured log level, text formating like color can be applied to the whole atom.
+
+Any text remaining in a line unmatched is interpreted as log message.
+
+Example:
+Matcher chain:
+1. Date-SimpleDateFormat: Column-Name:'Time', Format:'HH:mm:ss.SSS'
+2. Text-Nospace: Column-Name:'Thread', Prefix '[', Suffix ']'
+3. Text-Nospace: Column-Name:'Level', Marked as Log-Level
+3. Text-Nospace: Columns-Name:'Class' Suffix
+3. Text-Nospace: Ommited (Note: used to hide ' - ')
+
+Matches log file line:
+"17:43:24.186 [thread-1] DEBUG gmm.service.data.DataBase - Users loaded!"
+
+Presentation (Table):
+-----------------------------------------------------------------------------
+Time         | Thread   | Level | Class                     | Message
+-----------------------------------------------------------------------------
+17:43:24.186 | thread-1 | DEBUG | gmm.service.data.DataBase | Users loaded!
+-----------------------------------------------------------------------------
+
+
+3.1 Suffix vs Separator
+--------------------------------------
+
+With a separator the "territory" of the current matcher in the line is separated from the "territory" of the next matcher.
+If a suffix is set, the position/territory of the suffix depends heavily on the end of the matched part, which is determined by the separator. The following are some observations about separator and suffix (Note: Text-Nospace uses any Whitespace as seperator):
+
+- In the case of Test-Nospace, the separator (which consist of whitespace) is unlikely to be part of the matched or next value
+- In case of a (user-configured) Non-Whitespace separator, the separator may or may not be part of the matched value or next value
+- The word "separator" may imply to the user, that it is never part of a value
+- A separator that contains an "end" part of the current value and the "start" of the next value does not fullfill its role to split the values and thus is useless
+- The position of a suffix and where it makes sense and how it is handled heavily depends on wether the separator is not part of any value, part of the current value, or part of the next value, introducing a lot of complexity
+- Since values are supposed to be changing, using a part of them as separator pattern is probably not needed usually
+
+=> A separator is either part of the current or next value, but never both
+=> It may be clearer, easier and more untuitive if the separator is NEVER PART OF ANY VALUE and thus provides a clear split
+In that case:
+One can think about the suffix in two ways:
+ 1. As extension of the separator, fully including the separator itself
+ 2. As part between value and separator
+In both cases the parsing is the same, the only difference is the presentation: In the first case, the suffix must always contain the full separator. The first case is harder to enforce on the user and not sometimes even possible, because the user cannot express "any whitespace" in suffix, but there is a separator like that (Text-Nospace).
+=>
+If the separator is not configurable or set to default (=> separator = any whitespace):
+- The suffix always starts before the separator (because the separator part is removed anyway) or is empty
+- The suffix always ends at the start of the separator (the suffix can be seen as backwards extension to the suffix)
+Otherwise:
+- Minor issue: The suffix is not a necessary functionality, because the separator could just be changed instead of the suffix. But it may still make sense to let both be configurable, from a usability point of view.
+
+
+3.2 Regex matching
+--------------------------------------
+
+There are various forms in which regex matching can be used to extract a value from a string. It is assumed that the user wants to extract a value at a precise location inside a part of a string in a way that cannot be expressed just with static prefixes/suffixes. For this, capture groups seem like a perfect tool:
+The user specifies a regex which matches the relevant part, and a capturing group which matches the value the user wants to extract. A more advanced form could allow multiple capture groups to be defined (which would make it possible to match overlapping values and values without simple separation), but that would make the matcher the only matcher that can match multiple values and thus multiple columns, resulting in a much more complex interface for configuring a matcher like that (user would have to configure column names and other options for each capturing groups instead of for the matcher).
+Another advanced feature could be to allow the user to "layer" parsing on top of matching. For example, the user may want to extract a certain region from a line with a regex matcher and then apply DateTime parsing ontop of the extracted region. But, this would also very much complicate the design of the app as well as the user interface for using it, essentially creating 2-step process instead of a 1-step process throughout all matchers/parsers.
+
+
+3.3 Optional: Mapping Logback Meta-Data to our matchers
+--------------------------------------
+
+- Logger/Namespace: Text-Nospace
+- Class (rare) (same as logger, but garantueed to have the actual classname, not the string/.class given to the logger), parameter 0 => simpleclassname:
+	Text-Nospace
+- ContextName: Text-Nospace
+- Date: Date-SimpleDateFormat or Date-ISO-8601
+- File (rare): Text-Nospace
+- Caller: Stacktrace-Prefixable
+- Line (rare): Number
+- Message: (ignored, not meta-data)
+- Method (rare): Text-Nospace
+- n: (ignored, not relevant for parsing)
+- level: Text-Nospace
+- relative: Number
+- thread: Text-Nospace
+- exception, throwable, xException, xThrowable, rootException, nopexception: (ignored, not meta-data)
